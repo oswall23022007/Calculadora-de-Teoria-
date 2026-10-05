@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Calculadora de levas por M.A.S.</title>
+<style>
+:root{--bg:#f6f8fb;--fg:#17202e;--mut:#5d6878;--card:#fff;--bd:#d3dae5;--ac:#1d4fb8;--rd:#c23a2b;--gr:#13805a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10141b;--fg:#e6e9ee;--mut:#9aa4b2;--card:#181e27;--bd:#2f3846;--ac:#7cabff;--rd:#ff8272;--gr:#4cd08f}}
+:root[data-theme="dark"]{--bg:#10141b;--fg:#e6e9ee;--mut:#9aa4b2;--card:#181e27;--bd:#2f3846;--ac:#7cabff;--rd:#ff8272;--gr:#4cd08f}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+main{max-width:920px;margin:0 auto;padding:16px}
+h1{font-size:1.45rem;margin:.2em 0 .1em}h2{font-size:1.05rem;margin:0 0 10px;color:var(--ac)}
+.sub{color:var(--mut);margin:0 0 14px}
+section{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px;margin:0 0 14px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:12px}
+.k{border:1px solid var(--bd);border-radius:6px;padding:7px 10px}.k b{display:block;font-size:1.15rem}.k span{color:var(--mut);font-size:.8rem}
+.w{overflow-x:auto}table{border-collapse:collapse;width:100%}th,td{padding:5px 6px;text-align:left;border-bottom:1px solid var(--bd);white-space:nowrap}th{color:var(--mut);font-weight:600;font-size:.8rem}
+input,select,button{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:5px 7px}input{width:90px}button{cursor:pointer}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+.eq{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.85rem;white-space:pre-wrap;margin:4px 0 10px}
+#ub button{margin-right:4px}#ub .on{background:var(--ac);color:var(--card);border-color:var(--ac)}
+svg{width:100%;height:auto;display:block}.warn{color:var(--rd);margin:6px 0 0}label{margin-right:12px;display:inline-block;margin-bottom:6px}
+</style></head><body><main>
+<h1>Calculadora de levas por M.A.S.</h1>
+<p class="sub">Define los bloques del ciclo y se recalculan ω, los giros β, las ecuaciones de S, V y a, las gráficas y el diagrama de la leva.</p>
+
+<section><h2>Datos del ciclo</h2>
+<p><label>Ejercicio del PDF <select id="ej" style="width:auto;max-width:100%"></select></label></p>
+<div class="w"><table><thead><tr><th>#</th><th>Movimiento</th><th>Tiempo (s)</th><th>Altura h</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+<p><button id="add">Agregar bloque</button> <button id="rst">Cargar ejemplo</button></p>
+<span style="margin-right:12px;display:inline-block;margin-bottom:6px">Unidad <input id="un" type="hidden" value="in"><span id="ub" role="group" aria-label="Unidad de medida"></span></span>
+<label>Radio base <input id="rb" type="number" step="any" value="2"></label>
+<label>Giro de la leva <select id="dir"><option value="-1">horario</option><option value="1">antihorario</option></select></label>
+<div id="msg" class="warn"></div></section>
+
+<section><h2>Resultados</h2><div id="res"></div></section>
+
+<section><h2>Evaluar en un instante</h2>
+<label>t del ciclo (s) <input id="tt" type="number" step="any" value="1"></label><div class="eq" id="evo"></div></section>
+
+<section><h2>Ecuaciones evaluadas en t = 1, 2, 3…</h2>
+<label>t inicial (s) <input id="t0" type="number" step="any" value="1" style="width:70px"></label>
+<label>Paso (s) <input id="dt" type="number" step="any" value="1" style="width:70px"></label>
+<label>Cantidad <input id="nt" type="number" value="10" style="width:70px"></label>
+<div class="w" id="tb"></div></section>
+
+<section><h2>Diagrama de la leva</h2><div id="dg"></div></section>
+<section><h2>Gráficas</h2><div id="c1"></div><div id="c2"></div><div id="c3"></div></section>
+
+<section><h2>Grados de libertad del mecanismo</h2>
+<label>n (eslabones) <input id="gn" type="number" value="5" style="width:64px"></label>
+<label>J1 <input id="g1" type="number" value="4" style="width:64px"></label>
+<label>J2 <input id="g2" type="number" value="1" style="width:64px"></label>
+<div class="eq" id="go"></div></section>
+
+<script>
+const $=s=>document.querySelector(s),f=(x,d=3)=>String(+(+x).toFixed(d)),P=Math.PI;
+const EX=()=>[{t:'sube',T:2,h:2},{t:'mant',T:2.7,h:0},{t:'baja',T:1.7,h:3},{t:'mant',T:1.6,h:0}];
+const NM={sube:'Sube',mant:'Mantiene',baja:'Baja'};
+let B=EX(),seg=[],S=0;
+
+function ui(){
+ $('#rows').innerHTML=B.map((b,i)=>`<tr><td>${i+1}</td><td><select data-i="${i}" data-k="t">${Object.keys(NM).map(v=>`<option value="${v}"${b.t==v?' selected':''}>${NM[v]}</option>`).join('')}</select></td><td><input type="number" step="any" min="0" data-i="${i}" data-k="T" value="${b.T}"></td><td><input type="number" step="any" min="0" data-i="${i}" data-k="h" value="${b.h}"${b.t=='mant'?' disabled':''}></td><td><button data-d="${i}" aria-label="Quitar bloque">✕</button></td></tr>`).join('');
+ calc();
+}
+
+function at(t){
+ const s=seg.find(s=>t<=s.t0+s.T+1e-9)||seg[seg.length-1],u=t-s.t0,k=P/s.T,c=Math.cos(k*u),n=Math.sin(k*u),g=s.t=='sube'?1:s.t=='baja'?-1:0,h=s.h/2;
+ return{s,rel:s.t=='sube'?h*(1-c):s.t=='baja'?h*(1+c):null,pos:s.p0+g*h*(1-c),v:g*h*k*n,a:g*h*k*k*c};
+}
+
+function eq(s){
+ const U=$('#un').value;
+ if(s.t=='mant')return`S = ${f(s.p0)} ${U} (posición constante)\nV = 0\na = 0`;
+ const g=s.t=='sube',h=f(s.h),T=f(s.T),x=`π/${T}·t`,sg=g?'':'− ',vm=s.h/2*P/s.T;
+ return`S = ${g?'':h+' − '}${h}/2 [1 − cos(${x})]\nV = ${sg}${h}/2 · π/${T} · sen(${x})    |V|máx = ${f(vm)} ${U}/s\na = ${sg}${h}/2 · π²/${T}² · cos(${x})    |a|máx = ${f(vm*P/s.T)} ${U}/s²`;
+}
+
+function calc(){
+ const U=$('#un').value,msg=$('#msg');
+ S=B.reduce((a,b)=>a+(+b.T||0),0);
+ if(!(S>0)||B.some(b=>!(b.T>0))){msg.textContent='Todos los tiempos deben ser mayores que 0.';return}
+ msg.textContent='';
+ const w=1/S;let th=0,p=0,t0=0;
+ seg=B.map(b=>{const be=360*w*b.T,h=b.t=='mant'?0:+b.h,s={t:b.t,T:+b.T,h,be,th0:th,th1:th+be,p0:p,t0};th+=be;p+=b.t=='sube'?h:b.t=='baja'?-h:0;t0+=+b.T;return s});
+ const up=seg.filter(s=>s.t=='sube').reduce((a,s)=>a+s.h,0),dn=seg.filter(s=>s.t=='baja').reduce((a,s)=>a+s.h,0);
+ if(Math.abs(up-dn)>1e-9)msg.textContent=`Aviso: sube ${f(up)} ${U} en total y baja ${f(dn)} ${U}; el ciclo no cierra y la leva tendrá un escalón al volver a 0°.`;
+ $('#res').innerHTML=`<div class="g"><div class="k"><span>Σt (ciclo completo)</span><b>${f(S)} s</b></div><div class="k"><span>ω = 1 rev / Σt</span><b>${f(w,4)} rev/s</b></div><div class="k"><span>ω en RPM</span><b>${f(60*w,3)} RPM</b></div><div class="k"><span>ω en rad/s</span><b>${f(2*P*w,4)}</b></div></div>
+ <div class="w"><table><thead><tr><th>#</th><th>Bloque</th><th>β = ω · t · 360°</th><th>θ inicio → fin</th></tr></thead><tbody>${seg.map((s,i)=>`<tr><td>${i+1}</td><td>${NM[s.t]}</td><td>${f(w,4)} × ${f(s.T)} × 360° = <b>${f(s.be,2)}°</b></td><td>${f(s.th0,2)}° → ${f(s.th1,2)}°</td></tr>`).join('')}</tbody></table></div>
+ <p class="sub">Ecuaciones de cada bloque (t en segundos, desde 0 hasta el tiempo del bloque):</p>`
+ +seg.map((s,i)=>`<b>Bloque ${i+1}: ${NM[s.t].toLowerCase()}${s.t!='mant'?' '+f(s.h)+' '+U:''} en ${f(s.T)} s</b><div class="eq">${eq(s)}</div>`).join('');
+ ev();draw();tabla();
+ chart('#c1',`S, posición acumulada (${U})`,r=>r.pos,'var(--ac)');
+ chart('#c2',`V, velocidad (${U}/s)`,r=>r.v,'var(--gr)');
+ chart('#c3',`a, aceleración (${U}/s²)`,r=>r.a,'var(--rd)');
+}
+
+function ev(){
+ const U=$('#un').value,t=Math.min(Math.max(+$('#tt').value||0,0),S),r=at(t);
+ $('#evo').textContent=`θ = ${f(360*t/S,2)}°   Bloque ${seg.indexOf(r.s)+1} (${NM[r.s.t].toLowerCase()})\nS del bloque = ${r.rel===null?'—':f(r.rel,4)+' '+U}\nPosición acumulada = ${f(r.pos,4)} ${U}\nV = ${f(r.v,4)} ${U}/s\na = ${f(r.a,4)} ${U}/s²`;
+}
+
+function draw(){
+ const U=$('#un').value,Rb=+$('#rb').value||0,sg=+$('#dir').value,N=360,pts=[];let lo=1e9,hi=-1e9;
+ for(let i=0;i<=N;i++){const y=at(S*i/N).pos;pts.push(y);lo=Math.min(lo,y);hi=Math.max(hi,y)}
+ const R=pts.map(y=>Rb+y-lo),mx=Math.max(Rb+hi-lo,1e-9),sc=170/mx,cx=280,cy=300;
+ const X=(r,a)=>(cx+r*sc*Math.sin(sg*a*P/180)).toFixed(1),Y=(r,a)=>(cy-r*sc*Math.cos(sg*a*P/180)).toFixed(1);
+ let o=`<svg viewBox="0 0 560 560" role="img" aria-label="Perfil de la leva"><text x="10" y="22" fill="var(--mut)" font-size="13">Giro ${sg<0?'horario':'antihorario'} · radio base ${f(Rb)} ${U} (círculo rojo)</text>`
+ +`<circle cx="${cx}" cy="${cy}" r="${Rb*sc}" fill="none" stroke="var(--rd)" stroke-width="2"/>`
+ +`<path d="${R.map((r,i)=>(i?'L':'M')+X(r,i)+' '+Y(r,i)).join('')}Z" fill="none" stroke="var(--fg)" stroke-width="2.5"/>`;
+ seg.forEach(s=>{const m=(s.th0+s.th1)/2;
+  o+=`<line x1="${cx}" y1="${cy}" x2="${X(mx*1.08,s.th0)}" y2="${Y(mx*1.08,s.th0)}" stroke="var(--ac)" stroke-dasharray="4 3"/>`
+  +`<text x="${X(mx*1.25,m)}" y="${Y(mx*1.25,m)}" text-anchor="middle" fill="var(--ac)" font-size="13">${f(s.be,1)}° ${NM[s.t].toLowerCase()}</text>`});
+ const mk=(i,l,c)=>`<circle cx="${X(R[i],i)}" cy="${Y(R[i],i)}" r="4" fill="${c}"/><text x="${X(R[i]+mx*.07,i)}" y="${Y(R[i]+mx*.07,i)}" font-size="12" font-weight="600" fill="${c}" text-anchor="middle">${l}</text>`;
+ if(hi-lo>1e-9)o+=mk(pts.indexOf(lo),'PMI','var(--gr)')+mk(pts.indexOf(hi),'PMS','var(--rd)');
+ const y0=cy-R[0]*sc;
+ o+=`<circle cx="${cx}" cy="${y0-14}" r="14" fill="var(--card)" stroke="var(--gr)" stroke-width="2"/><line x1="${cx}" y1="${y0-28}" x2="${cx}" y2="${y0-70}" stroke="var(--gr)" stroke-width="3"/><text x="${cx+22}" y="${y0-40}" fill="var(--gr)" font-size="12">seguidor (0°)</text><circle cx="${cx}" cy="${cy}" r="4" fill="var(--fg)"/></svg>`;
+ $('#dg').innerHTML=o;
+}
+
+function chart(id,ttl,fn,col){
+ const N=400,W=600,H=180,L=44,pts=[];let lo=0,hi=0;
+ for(let i=0;i<=N;i++){const t=S*i/N,y=fn(at(t));pts.push([t,y]);lo=Math.min(lo,y);hi=Math.max(hi,y)}
+ if(hi-lo<1e-12)hi=lo+1;
+ const X=t=>L+(W-L-8)*t/S,Y=y=>H-24-(H-44)*(y-lo)/(hi-lo);
+ $(id).innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${ttl}"><text x="${L}" y="14" fill="var(--fg)" font-size="12" font-weight="600">${ttl}</text>`
+ +seg.map(s=>`<line x1="${X(s.t0)}" x2="${X(s.t0)}" y1="20" y2="${H-24}" stroke="var(--bd)" stroke-dasharray="3 3"/>`).join('')
+ +`<line x1="${L}" x2="${W-8}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--mut)"/><path d="${pts.map((p,i)=>(i?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join('')}" fill="none" stroke="${col}" stroke-width="2"/>`
+ +`<text x="2" y="${Y(hi)+4}" fill="var(--mut)" font-size="10">${f(hi,2)}</text><text x="2" y="${Y(lo)+4}" fill="var(--mut)" font-size="10">${f(lo,2)}</text><text x="${W-8}" y="${H-6}" text-anchor="end" fill="var(--mut)" font-size="10">t (s): 0 → ${f(S)}</text></svg>`;
+}
+
+function gdl(){
+ const n=+$('#gn').value,a=+$('#g1').value,b=+$('#g2').value;
+ $('#go').textContent=`GDL = 3(n − 1) − 2·J1 − J2\nGDL = 3(${n} − 1) − 2(${a}) − ${b} = ${3*(n-1)} − ${2*a+b} = ${3*(n-1)-2*a-b}`;
+}
+
+$('#rows').addEventListener('input',e=>{const t=e.target,i=t.dataset.i;if(i==null)return;B[i][t.dataset.k]=t.value;t.dataset.k=='t'?ui():calc()});
+$('#rows').addEventListener('click',e=>{const d=e.target.dataset.d;if(d==null)return;B.splice(d,1);ui()});
+$('#add').onclick=()=>{B.push({t:'mant',T:1,h:0});ui()};
+const EJ=[['I. Embotelladora: boquilla de llenado',15,1.3,1.8,2.1,1.4],['II. Etiquetadora: prensado de etiquetas',20,1.5,2,1.8,1.7],['III. Empaque: sellado térmico',25,2,1.5,2.3,1.2],['IV. Prensa: alimentador de piezas',12,1,1.6,1.4,2],['V. Granos: apertura de compuerta',30,2.2,1.8,2.5,1.5],['VI. Dosificadora farmacéutica',18,1.4,1.2,1.6,1.8],['VII. Banda: expulsor de productos',10,.8,1.5,1,2.2],['VIII. Empacadora: alimentador de cajas',22,1.8,1,2,1.7],['IX. Cerradura industrial',28,2.1,1.4,1.9,1.6],['X. Prensa de ensamblaje',35,2.5,2,2.2,1.3]];
+$('#ej').innerHTML='<option value="-1">Ejemplo de clase (pizarra, in)</option>'+EJ.map((e,i)=>`<option value="${i}">${e[0]}</option>`).join('');
+$('#ej').oninput=()=>{const i=+$('#ej').value;
+ if(i<0){B=EX();$('#un').value='in';$('#rb').value=2}
+ else{const e=EJ[i];B=[{t:'sube',T:e[2],h:e[1]},{t:'mant',T:e[3],h:0},{t:'baja',T:e[4],h:e[1]},{t:'mant',T:e[5],h:0}];$('#un').value='mm';$('#rb').value=50}
+ setU($('#un').value)};
+const UF={mm:1,cm:10,m:1000,in:25.4};
+function setU(u,conv){const o=$('#un').value;
+ if(conv&&o!=u){const k=UF[o]/UF[u];B.forEach(b=>b.h=+((+b.h||0)*k).toFixed(6));$('#rb').value=+((+$('#rb').value||0)*k).toFixed(6)}
+ $('#un').value=u;
+ $('#ub').innerHTML=Object.keys(UF).map(x=>`<button data-u="${x}" aria-pressed="${x==u}"${x==u?' class="on"':''}>${x}</button>`).join('');
+ ui()}
+$('#ub').onclick=e=>{const u=e.target.dataset.u;if(u)setU(u,true)};
+$('#rst').onclick=()=>{$('#ej').value=-1;$('#ej').oninput()};
+function tabla(){
+ const U=$('#un').value,t0=+$('#t0').value||0,dt=+$('#dt').value||1,n=Math.min(Math.max(+$('#nt').value||1,1),60);let o='';
+ seg.forEach((s,i)=>{if(s.t=='mant')return;
+  const up=s.t=='sube',k=P/s.T,h=s.h/2,g=up?1:-1;
+  o+=`<p><b>Bloque ${i+1}: ${up?'sube':'baja'} ${f(s.h)} ${U} en ${f(s.T)} s</b></p><div class="eq">${eq(s)}</div><table><thead><tr><th>t (s)</th><th>S (${U})</th><th>V (${U}/s)</th><th>a (${U}/s²)</th></tr></thead><tbody>`;
+  for(let j=0;j<n;j++){const t=t0+j*dt,c=Math.cos(k*t),z=Math.sin(k*t),y=up?h*(1-c):s.h-h*(1-c);
+   o+=`<tr${t>s.T+1e-9?' style="opacity:.5"':''}><td>${f(t,3)}</td><td>${f(y,4)}</td><td>${f(g*h*k*z,4)}</td><td>${f(g*h*k*k*c,4)}</td></tr>`}
+  o+='</tbody></table>'});
+ $('#tb').innerHTML=o+'<p class="sub">Cada ecuación se evalúa directamente en t = 1, 2, 3… Las filas atenuadas tienen t mayor que el tiempo del bloque: el número sale igual, pero ese movimiento ya terminó.</p>';
+}
+['un','rb','dir','tt','t0','dt','nt'].forEach(id=>$('#'+id).addEventListener('input',calc));
+['gn','g1','g2'].forEach(id=>$('#'+id).addEventListener('input',gdl));
+setU('in');gdl();
+</script></main></body></html>
